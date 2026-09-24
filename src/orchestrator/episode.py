@@ -80,7 +80,10 @@ class Episode:
         if fake_script is not None:
             llm: CompletionClient = FakeLLMClient(script=fake_script)
         else:
-            llm = LlamaServerClient(base_url=config.model.server_url)
+            llm = LlamaServerClient(
+                base_url=config.model.server_url,
+                timeout_s=config.model.request_timeout_s,
+            )
         return cls(goal=goal, llm=llm, channel=channel, config=config)
 
     def run(self) -> EpisodeResult:
@@ -101,6 +104,7 @@ class Episode:
             seed=self.config.seed,
             max_tokens=self.config.model.n_predict,
             submit_nudge=self.config.loop.submit_nudge,
+            closure_prompt=self.config.loop.closure_prompt,
         )
         loop = AgentLoop(goal=self.goal, llm=self.llm, tools=tools, config=loop_config)
         result = loop.run()

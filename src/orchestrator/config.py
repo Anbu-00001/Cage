@@ -48,6 +48,14 @@ class ModelConfig(BaseModel):
         "4 hardware threads for decode; do not spread onto E-cores (Part 1).",
     )
     n_predict: int = Field(default=512, description="Max tokens generated per completion call.")
+    request_timeout_s: float = Field(
+        default=600.0,
+        gt=0,
+        description="HTTP read timeout for one completion call. Must exceed the SLOWEST "
+        "expected prefill+decode: a 7B Q4 on 2 P-cores decodes ~4 tok/s, so a 512-token "
+        "step can take >120s -- the old 120s default timed the 7B out mid-generation "
+        "(measured 2026-09-24). Generous by design; the loop's step budget bounds wall time.",
+    )
 
 
 class SamplingConfig(BaseModel):
@@ -100,6 +108,9 @@ class LoopSettingsConfig(BaseModel):
     # observation and point the agent at submit_flag (targets the
     # found_not_submitted stall). Off by default -> baseline behaviour.
     submit_nudge: bool = Field(default=False)
+    # The CLOSURE CHECK prompt block (§4.2). Default on; set off to ablate the
+    # fix and measure its causal effect on solve rate.
+    closure_prompt: bool = Field(default=True)
 
 
 class RunConfig(BaseModel):

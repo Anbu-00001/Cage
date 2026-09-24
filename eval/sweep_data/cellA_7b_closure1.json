@@ -1,0 +1,93 @@
+{
+  "summary": {
+    "label": "qwen2.5-7b-q4km|closure=1|nudge=0",
+    "n": 5,
+    "solved": 2,
+    "rate": 0.4,
+    "wilson_lo": 0.118,
+    "wilson_hi": 0.769,
+    "found": 5,
+    "found_rate": 1.0,
+    "found_not_submitted": 3,
+    "give_up_rate": 0.0,
+    "mean_wall_s": 427.2,
+    "total_wall_s": 2186.5
+  },
+  "rows": [
+    {
+      "label": "qwen2.5-7b-q4km|closure=1|nudge=0",
+      "model": "qwen2.5-7b-q4km",
+      "closure": 1,
+      "nudge": 0,
+      "seed": 101,
+      "solved": false,
+      "found": true,
+      "found_not_submitted": true,
+      "outcome": "step_budget_exhausted",
+      "steps": 6,
+      "wall": 485.0,
+      "peak_temp_c": 73.0,
+      "swap_mb": 2144.1
+    },
+    {
+      "label": "qwen2.5-7b-q4km|closure=1|nudge=0",
+      "model": "qwen2.5-7b-q4km",
+      "closure": 1,
+      "nudge": 0,
+      "seed": 102,
+      "solved": true,
+      "found": true,
+      "found_not_submitted": false,
+      "outcome": "exploited_intended",
+      "steps": 5,
+      "wall": 435.8,
+      "peak_temp_c": 76.0,
+      "swap_mb": 2139.8
+    },
+    {
+      "label": "qwen2.5-7b-q4km|closure=1|nudge=0",
+      "model": "qwen2.5-7b-q4km",
+      "closure": 1,
+      "nudge": 0,
+      "seed": 103,
+      "solved": false,
+      "found": true,
+      "found_not_submitted": true,
+      "outcome": "step_budget_exhausted",
+      "steps": 6,
+      "wall": 432.1,
+      "peak_temp_c": 72.0,
+      "swap_mb": 2139.1
+    },
+    {
+      "label": "qwen2.5-7b-q4km|closure=1|nudge=0",
+      "model": "qwen2.5-7b-q4km",
+      "closure": 1,
+      "nudge": 0,
+      "seed": 104,
+      "solved": true,
+      "found": true,
+      "found_not_submitted": false,
+      "outcome": "exploited_intended",
+      "steps": 3,
+      "wall": 238.6,
+      "peak_temp_c": 73.0,
+      "swap_mb": 2138.5
+    },
+    {
+      "label": "qwen2.5-7b-q4km|closure=1|nudge=0",
+      "model": "qwen2.5-7b-q4km",
+      "closure": 1,
+      "nudge": 0,
+      "seed": 105,
+      "solved": false,
+      "found": true,
+      "found_not_submitted": true,
+      "outcome": "step_budget_exhausted",
+      "steps": 6,
+      "wall": 544.3,
+      "peak_temp_c": 82.0,
+      "swap_mb": 2137.9
+    }
+  ]
+}

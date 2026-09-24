@@ -93,6 +93,10 @@ class LoopConfig:
     # *found_not_submitted* stall (3B read the token but never closed the
     # loop) to test whether that gap is closure-prompting or reasoning.
     submit_nudge: bool = False
+    # The CLOSURE CHECK prompt block (§4.2 -- the fix that crossed the
+    # found_not_submitted floor). Default ON; the eval harness sets it OFF to
+    # ablate the fix and measure its causal effect on solve rate.
+    closure_prompt: bool = True
 
 
 def _truncate_and_hash(text: str, limit: int) -> tuple[str, bool, str]:
@@ -190,6 +194,7 @@ class AgentLoop:
             state_text=state_text,
             tools_description=self.tools.describe(),
             last_observation=self._last_observation,
+            closure_prompt=self.config.closure_prompt,
         )
 
         step_output = self._get_step_output(prompt)

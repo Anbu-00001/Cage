@@ -29,6 +29,12 @@ class StructuredMemory:
     def __init__(self, goal: Goal) -> None:
         self.state = AgentState(goal=goal)
         self._failure_signatures: set[str] = set()
+        # Signatures of actions actually EXECUTED (regardless of outcome), to
+        # catch *unproductive repeats* -- a small model re-issuing a command
+        # that already succeeded but taught it nothing (observed live: a 0.5B
+        # looping on `ls` after it had already found the target file). This is
+        # distinct from _failure_signatures, which only tracks dead ends.
+        self._executed_action_sigs: set[str] = set()
 
     # -- writes -----------------------------------------------------------
 
@@ -75,6 +81,26 @@ class StructuredMemory:
     def has_tried(self, hypothesis: str, call: ToolCall) -> bool:
         """True if this exact (hypothesis, action) pair already failed."""
         return self.signature_of(hypothesis, call) in self._failure_signatures
+
+    def action_signature(self, call: ToolCall) -> str:
+        """Signature of an ACTION alone (tool + meaningful args), ignoring
+        ``timeout_s`` and the hypothesis -- so the same command counts as the
+        same action however the model narrates or times it."""
+        args = {k: v for k, v in call.args.items() if k != "timeout_s"}
+        args_repr = ", ".join(f"{k}={v!r}" for k, v in sorted(args.items()))
+        return f"{call.tool}({args_repr})".strip().lower()
+
+    def record_execution(self, call: ToolCall) -> None:
+        """Note that an action actually ran (called after dispatch)."""
+        self._executed_action_sigs.add(self.action_signature(call))
+
+    def is_unproductive_repeat(self, call: ToolCall) -> bool:
+        """True if this exact action already executed once. Terminal actions
+        (submit_flag) are exempt -- re-submitting is handled by goal scoring,
+        not treated as an exploration loop."""
+        if call.tool == "submit_flag":
+            return False
+        return self.action_signature(call) in self._executed_action_sigs
 
     def render(self, max_facts: int = 12, max_failures: int = 8) -> str:
         """Compact, prompt-ready text rendering of the current belief

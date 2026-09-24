@@ -222,10 +222,34 @@ class AgentLoop:
                 return record, True, EpisodeOutcome.GAVE_UP
             return record, False, EpisodeOutcome.STEP_BUDGET_EXHAUSTED
 
+        # Unproductive-repeat guard: block an action that already EXECUTED once
+        # and taught the agent nothing (the enumerate->enumerate->enumerate loop
+        # a weak model falls into). Distinct from the dead-end guard above --
+        # this one catches *successful* repeats. It is the scaffolding-vs-scale
+        # lever: manufacturing the strategy a 0.5B lacks in parameters.
+        if self.memory.is_unproductive_repeat(step_output.action):
+            self._consecutive_blocked += 1
+            record = StepRecord(
+                step=step_idx,
+                output=step_output,
+                result=ToolResult(ok=False, error="blocked: action already executed, no new information"),
+                evaluation=Evaluation.DENIED,
+                blocked_repeat=True,
+            )
+            self._last_observation = (
+                f"You already ran {step_output.action.summary()} and saw its result; repeating it "
+                "yields no new information. Take a DIFFERENT action that builds on what you observed "
+                "-- e.g. read the contents of a specific file you found (cat / read_file)."
+            )
+            if self._consecutive_blocked >= _MAX_CONSECUTIVE_BLOCKED_REPEATS:
+                return record, True, EpisodeOutcome.GAVE_UP
+            return record, False, EpisodeOutcome.STEP_BUDGET_EXHAUSTED
+
         self._consecutive_blocked = 0
 
         # ACTION + OBSERVATION
         result = self.tools.dispatch(step_output.action)
+        self.memory.record_execution(step_output.action)
         bounded_stdout, truncated_out, hash_out = _truncate_and_hash(
             result.stdout, _MAX_OBSERVATION_CHARS
         )

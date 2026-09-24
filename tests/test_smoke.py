@@ -30,7 +30,7 @@ from pathlib import Path
 
 from src.agent.loop import LoopConfig
 from src.agent.memory import StructuredMemory
-from src.agent.models import EpisodeOutcome, Evaluation, Goal, ToolCall
+from src.agent.models import EpisodeOutcome, Evaluation, Goal, ToolCall, ToolResult
 from src.agent.summarizer import HeuristicSummarizer
 from src.agent.tools import ToolRegistry
 from src.orchestrator.channel import LocalMockChannel
@@ -113,6 +113,55 @@ def test_heuristic_summarizer_folds_old_state() -> None:
     assert "fact number 0" in memory.state.summary  # older facts folded in
 
 
+def _nudge_episode(transcript_dir: Path, *, submit_nudge: bool) -> Episode:
+    """One-file episode whose read surfaces a flag-shaped token, used to
+    exercise the optional submit-nudge scaffold (the found_not_submitted
+    lever). The scripted model reads the file but -- realistically for the
+    3B we observed -- does NOT submit; it re-reads instead. So the episode
+    only reaches the flag if the nudge pushes it to submit_flag."""
+    from src.orchestrator.config import LoopSettingsConfig
+
+    config = RunConfig(
+        name=f"nudge-{submit_nudge}",
+        seed=0,
+        transcript_dir=str(transcript_dir),
+        loop=LoopSettingsConfig(step_budget=4, replan_interval=10, submit_nudge=submit_nudge),
+    )
+    channel = LocalMockChannel(
+        responses={"head -c 4096 -- 'creds.txt'": ToolResult(
+            ok=True, exit_code=0, stdout="SESSION_TOKEN=FLAG{found_it_9x}")}
+    )
+    read = (
+        '{"hypothesis":"creds.txt may hold it.","plan":"read it.",'
+        '"action":{"tool":"read_file","args":{"path":"creds.txt"},"rationale":"read"},'
+        '"new_facts":[],"open_questions":[],"give_up":false}'
+    )
+    goal = Goal(id="nudge", level=1, description="find the token", success_predicate="FLAG{found_it_9x}")
+    # Model only ever proposes reads (never submit_flag on its own): the
+    # unproductive-repeat guard blocks re-reads, so absent the nudge it can
+    # never reach the flag; with the nudge, step 1's prompt carries the
+    # submit redirect.
+    return Episode.from_config(config, goal, channel=channel, fake_script=[read] * 4)
+
+
+def test_submit_nudge_fires_when_enabled(tmp_path: Path) -> None:
+    episode = _nudge_episode(tmp_path, submit_nudge=True)
+    episode.run()
+    # The nudge is appended to the observation and thus shows up in the
+    # NEXT step's rendered prompt (FakeLLMClient records every prompt).
+    calls = getattr(episode.llm, "calls")
+    assert any("submit_flag(flag=\"FLAG{found_it_9x}\")" in p for p in calls[1:]), \
+        "submit-nudge text should reach a later prompt when the lever is on"
+
+
+def test_submit_nudge_silent_when_disabled(tmp_path: Path) -> None:
+    episode = _nudge_episode(tmp_path, submit_nudge=False)
+    episode.run()
+    calls = getattr(episode.llm, "calls")
+    assert not any("submit it NOW" in p for p in calls), \
+        "no nudge text should appear when the lever is off (baseline)"
+
+
 def test_loop_config_defaults_match_design_doc_posture() -> None:
     # Part 7/17: hard step budget, periodic (not per-step) re-plan,
     # temperature 0 by default when measuring capability not creativity.
@@ -127,6 +176,8 @@ _TESTS = [
     test_failure_memory_blocks_exact_repeat,
     test_tool_registry_rejects_bad_args_without_raising,
     test_heuristic_summarizer_folds_old_state,
+    test_submit_nudge_fires_when_enabled,
+    test_submit_nudge_silent_when_disabled,
     test_loop_config_defaults_match_design_doc_posture,
 ]
 

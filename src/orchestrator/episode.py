@@ -100,6 +100,7 @@ class Episode:
             # seeding, but for this scaffold the run seed is authoritative.
             seed=self.config.seed,
             max_tokens=self.config.model.n_predict,
+            submit_nudge=self.config.loop.submit_nudge,
         )
         loop = AgentLoop(goal=self.goal, llm=self.llm, tools=tools, config=loop_config)
         result = loop.run()

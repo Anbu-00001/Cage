@@ -96,6 +96,10 @@ class LoopSettingsConfig(BaseModel):
     step_budget: int = Field(default=30, ge=1)
     replan_interval: int = Field(default=5, ge=1)
     char_budget: int = Field(default=4000, ge=200)
+    # Optional scaffolding lever: highlight a flag-shaped token in an
+    # observation and point the agent at submit_flag (targets the
+    # found_not_submitted stall). Off by default -> baseline behaviour.
+    submit_nudge: bool = Field(default=False)
 
 
 class RunConfig(BaseModel):

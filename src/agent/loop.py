@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from dataclasses import dataclass, field
 
 from src.agent.interfaces import CompletionClient
@@ -63,6 +64,14 @@ _MAX_CONSECUTIVE_BLOCKED_REPEATS = 3
 # afford to spend generously (Part 1/2/13).
 _MAX_PARSE_RETRIES = 1
 
+# Structural signature of a "flag / token" value: an UPPER-or-mixed prefix
+# then a brace-delimited body (FLAG{...}, CTF{...}, KEY{...}). Used ONLY by
+# the optional submit-nudge scaffold to recognise that an observation looks
+# like it contains a target token. It matches SHAPE, never the scored answer
+# -- the nudge is extracted from what the model already saw in stdout, so it
+# leaks nothing the goal's success_predicate holds.
+_FLAG_SHAPE = re.compile(r"[A-Za-z][A-Za-z0-9_]{1,15}\{[^}\s]{1,64}\}")
+
 
 @dataclass
 class LoopConfig:
@@ -76,6 +85,14 @@ class LoopConfig:
     temperature: float = 0.0
     seed: int | None = None
     max_tokens: int = 512
+    # Scaffolding lever (default OFF -> baseline behaviour, tests unaffected).
+    # When on, after a non-terminal action whose observation contains a
+    # flag-shaped token, the loop appends a one-line redirect telling the
+    # agent it appears to have found the target and should submit_flag. This
+    # is the counterpart to the unproductive-repeat guard: it targets the
+    # *found_not_submitted* stall (3B read the token but never closed the
+    # loop) to test whether that gap is closure-prompting or reasoning.
+    submit_nudge: bool = False
 
 
 def _truncate_and_hash(text: str, limit: int) -> tuple[str, bool, str]:
@@ -265,6 +282,23 @@ class AgentLoop:
             }
         )
         self._last_observation = _format_observation(result)
+
+        # SUBMIT-NUDGE scaffold (optional): if this observation surfaced a
+        # flag-shaped token and we did not just try to submit, highlight it
+        # and point at the terminal action. Targets *found_not_submitted*.
+        if (
+            self.config.submit_nudge
+            and step_output.action.tool != "submit_flag"
+            and result.ok
+        ):
+            match = _FLAG_SHAPE.search(result.stdout or "")
+            if match:
+                token = match.group(0)
+                self._last_observation += (
+                    f"\n\nNOTE: the output above contains a value shaped like a target token: "
+                    f"{token} -- if this is the secret the goal asked for, submit it NOW with "
+                    f"submit_flag(flag=\"{token}\"). Do not re-read; take the submit action."
+                )
 
         # EVALUATE -- a cheap heuristic, not an extra inference call.
         evaluation = self._evaluate(result)

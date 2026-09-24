@@ -230,9 +230,55 @@ Baseline before starting: 8.1 GB free RAM, 146 GB disk, load 1.2 → healthy.
 - **llama.cpp build: RUNNING in background**, capped `JOBS=2 nice -19` (crash-safety: won't peg
   the 2 P-cores; Ubuntu thermal-throttles rather than crashes). No model downloaded (that's a
   separate, careful step). Log: scratchpad/llama_build.log. Prediction be9414 (p=0.85).
-- **NEXT (after build):** verify binaries; then a SMALL model + short `llama-bench` to get real
-  tok/s (Phase 1 measurement) — done carefully with monitoring. Alpine guest (Phase 2) needs
-  root + virt tools → hand-off/scripted, not auto-run here.
+- **llama.cpp built** (JOBS=2 nice-19, exit 0, no crash — prediction be9414 TRUE). Binaries in
+  third_party/llama.cpp/build/bin (gitignored clone; commit 2b70583).
+- **REAL tok/s MEASURED (Phase 1 [FACT], laptop safe — temp 53→59°C, 0 swap):** Qwen2.5-0.5B
+  Q4_K_M, `llama-bench`. Decode tok/s by threads: **t=2 → 39.6** (best), t=4 → 20.9, t=8 → 20.9,
+  t=12 → 15.7. **Decode fastest at 2 P-core threads, degrades with E-cores → confirms the "2 fast
+  cores" thesis on-device.** This REFUTES my earlier membw-ceiling guess (decode ≠ STREAM's
+  parallel scaling). Revised honest anchor: effective ~18 GB/s at the 2-thread optimum → 3B Q4
+  ≈ 9–13 tok/s, 7B ≈ 4–5 tok/s (more pessimistic, reinforces 3B-default). Updated DE-RISKING §1/§4.
+  Calibration note: my informal 55–75 tok/s guess was too high (assumed full-bandwidth threading
+  decode can't use) — logged as a learning.
+- config threads set to 2 (measured optimum).
+- **Alpine guest Phase-2 hand-off DONE (files, validated, no root run):** vm/domain.xml.template
+  (valid XML: 2 E-core vCPUs, UEFI, overlay disk, vsock-only, NO NIC), vm/scripts/define_domain.sh
+  + verify_isolation.sh (bash -n clean), docs/GUEST-SETUP.md runbook. User runs it as root.
+- **3B driver bench DONE (Phase-1 [FACT], safe — temp 51→62°C, 0 swap):** Qwen2.5-3B Q4_K_M
+  (1.95 GiB). Decode **~4 tok/s** (t=2 → 3.98, t=4 → 4.41). ca98b3 (download) TRUE; **bb1c81
+  (decode∈[8,15]) FALSE** — measured ~4, my extrapolation was too high (Brier 0.49, a real miss).
+  Lesson: effective GB/s is NOT constant across model size (0.5B ~18 GB/s vs 3B ~8.6 GB/s at low
+  threads) — measure the actual driver, don't extrapolate across a 6× size gap.
+  **Design implication:** ~4 tok/s → ~50s per 200-tok step → ~30min/40-step episode. Levers:
+  prefer 1–1.5B driver here + heavier scaffolding; 2×8GB dual-channel upgrade ~doubles it;
+  planner-arbitrage more attractive. Updated DE-RISKING §4.
+
+## BOTH remaining host-dependent items now DONE (2026-09-24)
+
+1. 3B driver tok/s measured (above). 2. Alpine guest = complete scripted hand-off (files
+validated). The only thing left is genuinely the user's: run GUEST-SETUP.md as root to boot the
+live cage, then real episodes against it (that produces the capability numbers = the experiment).
+
+## LIVE CAGE WORKS — Phase 2 milestone hit (2026-09-24)
+
+First real host→guest action over vsock succeeded. `VsockChannel(cid=3).execute('id')` →
+`uid=1000(cage)` running Alpine 3.24.2 (kernel 6.18.53-0-virt), daemon as the unprivileged
+cage user, `vmw_vsock_virtio_transport` loaded. Architecture C is live end-to-end: host
+orchestrator ↔ narrow logged vsock ↔ in-guest action daemon. Prediction 3a6855 TRUE.
+
+**Live-bringup bugs found & fixed in the scripts (real Phase-2 lessons):**
+1. `alpine-make-vm-image` runs the setup script on the HOST unless `--script-chroot` → added it
+   (else adduser/etc writes hit the host). 2. Guest needs `vmw_vsock_virtio_transport` in
+   /etc/modules, not just `vsock` (bind succeeds but host connects time out) → added. 3. UEFI/OVMF
+   domain can't boot the BIOS/syslinux alpine image → switched domain to legacy BIOS (SeaBIOS).
+   4. `qemu-img -b` resolves a RELATIVE backing path against the overlay's dir → reset_overlay now
+   uses realpath. 5. libvirt disk path must be ABSOLUTE (uid 64055 resolves from /) → define uses
+   realpath. 6. images under /home are unreadable by system-libvirt qemu → use /var/lib/libvirt/
+   images. 7. XML comments can't contain `--` (hit TWICE) → always xmllint after XML edits.
+
+**NEXT (optional, heavier):** a real episode against the live cage = provision a challenge in the
+guest (Phase 3, root) + run llama-server (0.5B is snappy at ~40 tok/s; 3B ~4) + point config at
+the vsock channel. That produces the first real capability data point.
 
 ## Open questions to resolve later
 

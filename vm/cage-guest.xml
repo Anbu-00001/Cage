@@ -1,0 +1,79 @@
+<!--
+  Constraint Cage guest domain (libvirt/KVM). Rendered by
+  vm/scripts/define_domain.sh (simple @@TOKEN@@ substitution).
+
+  This encodes the SETTLED design (CLAUDE.md / constraint-cage.md Part 5, 19):
+    * 2 vCPU pinned to E-cores  -> host keeps both P-cores for inference
+    * 1.5-3 GB RAM (default 2 GB)
+    * boots a thin qcow2 OVERLAY over the immutable golden image (fast reset)
+    * Legacy BIOS boot (SeaBIOS): matches the alpine-make-vm-image image
+    * NARROW CHANNEL ONLY: virtio-vsock + serial console. NO NIC by default
+      (isolation by topology). NO shared folders / clipboard / USB / GPU.
+    * libvirt applies its built-in seccomp policy + AppArmor sVirt confinement
+      automatically; we do NOT relax them.
+  The host is sacred: nothing here bridges to the LAN or mounts a host path.
+-->
+<domain type='kvm'>
+  <name>cage-guest</name>
+  <memory unit='KiB'>2097152</memory>
+  <currentMemory unit='KiB'>2097152</currentMemory>
+  <vcpu placement='static'>2</vcpu>
+
+  <!-- Pin both vCPUs to E-cores so P-cores stay free for llama.cpp decode.
+       Verify the E-core ids on THIS unit with lscpu extended output (the
+       lower-max-MHz cluster). Defaults below are placeholders. -->
+  <cputune>
+    <vcpupin vcpu='0' cpuset='10'/>
+    <vcpupin vcpu='1' cpuset='11'/>
+  </cputune>
+
+  <os>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <!-- Legacy BIOS (SeaBIOS). alpine-make-vm-image builds a BIOS/syslinux
+         image, so UEFI/OVMF dropped it into the firmware menu; BIOS boots it
+         directly. (Learned live 2026-09-24; UEFI was nice-to-have, not essential.) -->
+    <boot dev='hd'/>
+  </os>
+
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+
+  <!-- host-passthrough: the guest sees the real CPU; fine for a local lab. -->
+  <cpu mode='host-passthrough' check='none'/>
+
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+
+    <!-- The per-trial OVERLAY (CoW over golden). reset = discard+recreate this
+         file (vm/scripts/reset_overlay.sh); the golden base is never mutated. -->
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='none' discard='unmap'/>
+      <source file='/var/lib/libvirt/images/cage-trial.qcow2'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+
+    <!-- Narrow, logged action channel. Host is CID 2; this guest is 3. -->
+    <vsock model='virtio'>
+      <cid auto='no' address='3'/>
+    </vsock>
+
+    <!-- Headless capture of guest boot/logs into telemetry. -->
+    <serial type='pty'><target port='0'/></serial>
+    <console type='pty'><target type='serial' port='0'/></console>
+
+    <memballoon model='virtio'/>
+
+    <!-- DELIBERATELY ABSENT (the cage is isolation-by-topology):
+         <interface> (no NIC / no LAN bridge), <filesystem> (no 9p/virtiofs),
+         <channel> clipboard, <hostdev> USB/GPU passthrough, <graphics>.
+         To give the challenge a LOCAL-only network for L3 scenarios, add an
+         ISOLATED libvirt network here (no forward to the LAN) — never a bridge. -->
+  </devices>
+</domain>

@@ -34,10 +34,17 @@ from src.agent.models import ToolCall, ToolResult
 
 
 class ToolArgs(BaseModel):
-    """Base class for per-tool argument schemas. Subclasses add fields;
-    pydantic rejects unknown/malformed fields at construction time."""
+    """Base class for per-tool argument schemas. Subclasses add fields.
 
-    model_config = {"extra": "forbid"}
+    ``extra="ignore"`` (not "forbid"): small models routinely tuck an extra
+    key into the args object — e.g. a ``rationale`` that belongs on the
+    ToolCall, or a stray ``comment`` — and rejecting the whole call for that
+    would strand the agent (observed live 2026-09-24: every run_command was
+    rejected for an extra ``rationale``). Unknown keys do nothing, so we drop
+    them and still run the call. Wrong *types* on real fields are still caught.
+    """
+
+    model_config = {"extra": "ignore"}
 
 
 class RunCommandArgs(ToolArgs):

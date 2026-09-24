@@ -30,6 +30,9 @@ if [ ! -f "$GOLDEN" ]; then
     echo "error: golden image not found: $GOLDEN (build it with build_golden_image.sh)." >&2
     exit 1
 fi
+# Use an ABSOLUTE backing path: qemu-img resolves a relative -b path relative to
+# the OVERLAY's directory (not $PWD), which doubles a path like vm/images/... .
+GOLDEN="$(realpath "$GOLDEN")"
 
 # Integrity: the golden image must never change between trials. Record/compare
 # its checksum so a silently-mutated base can't corrupt a whole batch of runs.

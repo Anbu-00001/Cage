@@ -50,7 +50,12 @@ set -eu
 # the engineered in-guest boundaries (Levels 1-7) are layered on top of it.
 adduser -D -g "cage operator" cage
 # Load vsock in the guest so the daemon can bind AF_VSOCK (DE-RISKING §5).
-echo "vsock" >> /etc/modules
+# BOTH are needed: `vsock` is the core, `vmw_vsock_virtio_transport` is the
+# guest<->host transport over the virtio device. Without the transport, a bind
+# succeeds but host connects to the guest CID time out. (Learned live 2026-09-24.)
+printf 'vsock\nvmw_vsock_virtio_transport\n' >> /etc/modules
+# Load it now too, so this boot works without waiting for a rebuild.
+modprobe vmw_vsock_virtio_transport 2>/dev/null || true
 # OpenRC service that starts the action daemon at boot.
 cat > /etc/init.d/cage-actiond <<'SVC'
 #!/sbin/openrc-run
@@ -70,10 +75,15 @@ SETUP_EOF
 chmod +x "$SETUP"
 
 echo "building base Alpine image ($IMG_SIZE) ..."
+# --script-chroot is REQUIRED: without it the setup script runs on the HOST
+# (host's Debian adduser, host's /etc) instead of inside the Alpine image. With
+# it, the script is chrooted into the image so `adduser` is BusyBox and every
+# /etc write lands in the guest. (Learned by running it for real, 2026-09-24.)
 alpine-make-vm-image \
     --image-format qcow2 \
     --image-size "$IMG_SIZE" \
     --packages "$PACKAGES" \
+    --script-chroot \
     "$OUT" \
     -- "$SETUP"
 

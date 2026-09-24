@@ -43,7 +43,16 @@ too slow). Grammar-constrained `LlamaServerClient` is done. Remaining: build lla
 measured stack). **Stop:** real tok/s + joules recorded; a single agent step runs against a
 real model with grammar-constrained output. **Risk gate:** if single-channel, lock to 1B–3B.
 
-## Phase 2 — The cage (VM + channel + reset + confinement) ⬜
+## Phase 2 — The cage (VM + channel + reset + confinement) 🔨  (scripted hand-off ready)
+
+**Update 2026-09-24:** the full Phase-2 hand-off is written and validated (bash -n clean,
+domain XML well-formed) — it just needs the user to run it as root (running QEMU/libvirt on the
+daily driver is their call, per the safety scope). Pieces: `vm/domain.xml.template` (2 E-core
+vCPUs, UEFI, overlay disk, vsock-only, no NIC), `vm/scripts/build_golden_image.sh` (Alpine
+golden + daemon + OpenRC), `reset_overlay.sh` (overlay-discard reset, functionally verified),
+`define_domain.sh`, `verify_isolation.sh` (Part-7 hardening audit), and the ordered runbook
+[docs/GUEST-SETUP.md](GUEST-SETUP.md). Remaining: the user runs it + the runtime isolation checks.
+
 
 **Goal:** a pristine, resettable, isolated Alpine target the agent reaches only over vsock.
 

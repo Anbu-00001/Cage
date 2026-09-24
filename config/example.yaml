@@ -24,7 +24,8 @@ model:
   quant: Q4_K_M           # [REC] design doc default driver class, Part 2/13
   server_url: http://127.0.0.1:8080   # llama-server, started via scripts/build_llama_cpp.sh output
   ctx: 4096                # [REC] capped context — prefill is compute-bound on 2 P-cores (Part 2)
-  threads: 4                # [REC] pin to the 2 P-cores' 4 HW threads, never spill onto E-cores (Part 1)
+  threads: 2                # [FACT 2026-09-24] llama-bench on this unit: decode peaks at 2 threads
+                            # (39.6 tok/s on 0.5B), degrades at 4/8/12 — E-cores hurt decode. See DE-RISKING §4.
   n_predict: 512             # max tokens generated per completion call
 
 sampling:

@@ -33,12 +33,12 @@ bandwidth is decisive on its own.) **Prediction `ffe5dd` resolved FALSE** (I'd g
   clearly Yellow/Red for sustained autonomous use. Bias to 1B–4B.
 - **Cheapest upgrade in the project:** if `dmidecode` shows 1×16 GB, adding a matched 8 GB stick
   (→ 2×8 dual-channel) would roughly *double* the tok/s ceiling. Flag it in the write-up.
-- **Thread-count nuance (new, measured):** the 2 P-cores alone reach only ~13 GB/s of the
-  ~42 GB/s ceiling — memory saturation needs many threads. So "pin to 2 P-cores" (DE-RISKING §4)
-  is right for *compute-bound prefill* but **decode is bandwidth-bound and may want more threads**
-  to approach the ceiling. Don't assume; let `llama-bench` arbitrate in Phase 1 — but the raw
-  ceiling and its thread-scaling are now known, which is exactly the kind of "measure, don't
-  assume" result the project exists to produce.
+- **Thread-count — RESOLVED by direct `llama-bench` measurement (see §4).** The membw STREAM
+  ceiling (~42 GB/s) needs many threads, which tempted the hypothesis "decode may want more
+  threads too." **Measured: it does NOT.** Real decode is *fastest at 2 threads (the P-cores)*
+  and degrades as E-core threads are added. STREAM's parallel scaling does not transfer to
+  llama.cpp decode — a clean "measure, don't assume" catch that confirms the "2 fast cores"
+  thesis rather than the bandwidth-ceiling extrapolation.
 
 ## 2. RAPL energy counters — root-only by default `[VERIFIED-2026-09]` → mitigated
 
@@ -83,10 +83,55 @@ grammar constrains *syntax*, not *semantics* (it can still pick a valid-but-wron
 argument) — that's a reasoning failure the taxonomy already captures (`tool-hallucination`),
 not a parse failure.
 
-## 4. P-core / E-core thread pinning `[VERIFIED-2026-09]`
+## 4. P-core / E-core thread pinning `[FACT — measured on this unit 2026-09-24]`
 
 **Risk:** naively using all 12 threads on the hybrid 150U can *reduce* tok/s via cross-cluster
 scheduling and cache contention.
+
+**MEASURED on this laptop `[FACT]`** — `llama-bench`, Qwen2.5-0.5B Q4_K_M (0.46 GB), decode (tg64):
+
+| threads | decode tok/s |
+|---|---|
+| **2 (P-cores)** | **39.6** ← best |
+| 4 | 20.9 |
+| 8 | 20.9 |
+| 12 | 15.7 |
+
+**Decode is fastest at exactly 2 threads and monotonically degrades as E-core threads are
+added** — a direct, on-device confirmation of the whole "two fast cores, not twelve" thesis
+(constraint-cage.md Part 1). Prefill (pp) is noisier and prefers more threads (compute-bound),
+but decode — which dominates autonomous-loop latency — wants the 2 P-cores alone. Temp went
+53→59 °C across the sweep (no thermal issue). This *refutes* the membw-derived "decode may want
+more threads" guess (§1): STREAM's embarrassingly-parallel streaming saturates aggregate DRAM
+with many threads, but llama.cpp decode has per-token dependencies where E-cores' low IPC +
+cross-cluster latency dominate.
+
+**tok/s anchors — BOTH MEASURED on this unit `[FACT]`** (`llama-bench`, Q4_K_M, decode/tg):
+
+| model | size | best decode tok/s | effective GB/s | best threads |
+|---|---|---|---|---|
+| Qwen2.5-**0.5B** | 0.46 GB | **39.6** | ~18 | 2 |
+| Qwen2.5-**3B** (the driver) | 1.95 GB | **~4.4** | ~8.6 | 4 (≈ t=2's 4.0) |
+
+**The driver runs at only ~4 tok/s on this single-channel laptop.** Two corrections this forces:
+1. Effective bandwidth is **not constant across model size** — my 0.5B→3B extrapolation (predicted
+   9–13 tok/s, `bb1c81`) was **wrong (resolved FALSE)**: the larger 3B footprint realizes only
+   ~8.6 GB/s at low thread counts vs the 0.5B's ~18, so measured 3B decode (~4) is ~half the naive
+   scaling. Always measure the actual driver, never extrapolate across a 6× size gap.
+2. Optimal threads is **model-size-dependent**: 0.5B peaks at 2 threads, 3B is flat/slightly better
+   at 4 (more compute per token before bandwidth saturates). Both are close; the "≈2 P-cores" rule
+   holds directionally.
+
+**Design implication (real):** at ~4 tok/s a ~200-token step takes ~50 s, so a 40-step episode is
+~30+ min — the "many cheap attempts" premise is strained at 3B on this box. Levers: (a) prefer a
+**1–1.5B driver** here and lean harder on scaffolding to cut tokens/step; (b) the 2×8 GB
+dual-channel upgrade (~doubles bandwidth → ~8 tok/s) becomes the highest-ROI change; (c) the
+planner-arbitrage tier (cheap local executor + occasional API planner) looks more attractive.
+This is exactly the kind of constraint the project exists to surface honestly.
+
+**Findings (prior, web):** on Intel 12th-gen hybrids, **P-core-only execution measured ~3× faster**
+than mixed scheduling for llama.cpp; some users disable E-cores in BIOS for inference. Prediction
+`a244fe` **resolved TRUE**, now doubly confirmed by the measurement above.
 
 **Findings:** on Intel 12th-gen hybrids, **P-core-only execution measured ~3× faster** than
 mixed scheduling for llama.cpp; pure affinity alone isn't perfect (E-cores may still take

@@ -1,0 +1,9 @@
+{
+  "//": "Repo root is the import base: absolute imports like `src.agent.loop`, `eval.schema`, `challenges.paramlib` resolve from here. Without this, Pyright/Pylance flag every intra-repo import even though they run fine via `python -m` from the repo root.",
+  "extraPaths": ["."],
+  "include": ["src", "eval", "challenges", "tests"],
+  "exclude": ["**/__pycache__", ".venv", "models", "vm/images", "**/*.gguf"],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true
+}

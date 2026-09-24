@@ -1,0 +1,12 @@
+# Python dependencies for src/agent, src/orchestrator, src/telemetry.
+# Kept deliberately small — Part 4's RAM budget has no slack for a heavy
+# dependency tree, and the tech-stack section's whole thesis is "Python
+# for the lab bench, migrate the hot loop out once it stabilises" (v0.4+
+# Rust orchestrator), not "accumulate a framework."
+
+httpx>=0.27          # orchestrator -> llama-server HTTP client (Part 3/24: model on host, reached over HTTP)
+pydantic>=2.6         # typed tools, config schema, transcript models throughout src/agent + src/orchestrator
+pyyaml>=6.0           # config/example.yaml loading (src/orchestrator/config.py)
+
+# -- dev / test --
+pytest>=8.0           # tests/test_smoke.py and friends

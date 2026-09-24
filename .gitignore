@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+
+# Model weights & inference artifacts (large; never commit)
+models/
+*.gguf
+*.bin
+
+# VM images & snapshots (large; never commit)
+vm/images/
+*.qcow2
+*.img
+*.raw
+
+# Run outputs / telemetry / traces
+runs/
+results/
+*.ndjson
+*.sqlite
+*.db
+transcripts/
+
+# Local tooling indexes (per global guidance: keep out of the tracked tree)
+.codegraph/
+graphify-out/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store

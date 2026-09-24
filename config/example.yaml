@@ -1,0 +1,61 @@
+# The Constraint Cage — example run configuration
+#
+# Validated against src/orchestrator/config.py:RunConfig. Every field here
+# is one of the artifacts constraint-cage.md Part 18 says must be pinned
+# for reproducibility: model checkpoint + quant, inference params, VM
+# shape, sampling, seed, step budget. Run it with:
+#
+#   ./run.sh --seed 42 --config config/example.yaml
+#
+# `run.sh` refuses to point this config at a real VM channel until a guest
+# actually exists (see channel.py TODOs) and falls back to --smoke;
+# override vm.channel: local_mock explicitly once you're ready to wire a
+# real guest, or leave it as-is to keep the whole pipeline runnable today.
+
+name: example
+seed: 42
+
+model:
+  # [OPEN] no checkpoint is pinned yet — Part 13/22 Phase 1 says to name
+  # the exact checkpoint only after benchmarking 2-3 candidates with
+  # llama-bench on THIS machine. Fill in path + sha256 once that's done.
+  path: null            # e.g. models/qwen2.5-3b-instruct-q4_k_m.gguf
+  sha256: null           # sha256sum of the .gguf file above
+  quant: Q4_K_M           # [REC] design doc default driver class, Part 2/13
+  server_url: http://127.0.0.1:8080   # llama-server, started via scripts/build_llama_cpp.sh output
+  ctx: 4096                # [REC] capped context — prefill is compute-bound on 2 P-cores (Part 2)
+  threads: 4                # [REC] pin to the 2 P-cores' 4 HW threads, never spill onto E-cores (Part 1)
+  n_predict: 512             # max tokens generated per completion call
+
+sampling:
+  temperature: 0.0    # [REC] Part 17: fix sampling when measuring capability, not creativity
+  top_p: 1.0
+  top_k: 1
+  repeat_penalty: 1.1
+  seed: 42
+
+vm:
+  image_path: vm/images/alpine-cage-base.qcow2   # golden image, owned by the VM/challenge lane
+  snapshot_name: golden
+  vcpus: 2               # [REC] Part 1/24: 2 vCPU on E-cores; never 8+ (oversubscription slows everything)
+  ram_mb: 2048             # within the 1.5-3 GB budget row, Part 4/24
+  channel: local_mock       # local_mock | ssh | vsock — see src/orchestrator/channel.py
+  ssh_host: 127.0.0.1
+  ssh_port: 2222
+  ssh_user: researcher
+  ssh_key_path: null
+  vsock_cid: null
+  vsock_port: 9000
+
+telemetry:
+  enabled: true
+  hz: 1.0                  # Part 11: 1 Hz resource + energy + trace vector
+  sink: ndjson
+  output_path: runs/telemetry.ndjson
+
+loop:
+  step_budget: 30            # [REC] hard cap — Part 7/17, no unbounded wandering
+  replan_interval: 5          # periodic, not per-step, re-plan — Part 7
+  char_budget: 4000            # triggers HeuristicSummarizer — Part 2
+
+transcript_dir: runs/transcripts

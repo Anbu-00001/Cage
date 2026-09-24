@@ -171,6 +171,69 @@ bd5408 code-first-run TRUE. ffe5dd (channels) still OPEN → needs dmidecode on 
 pyrightconfig.json extraPaths — runtime is authoritative & green; likely needs a Pylance
 reload. Not a runtime issue.
 
+## Polyglot + Phase 3 increment (2026-09-24)
+
+Toolchain here is full: g++13+OpenMP, rustc/cargo 1.96, clang18. Built + RAN both polyglot legs.
+
+- **C++ leg (NEW, built+run):** `bench/membw.cpp` — STREAM-triad memory-bandwidth microbench,
+  OpenMP, arrays >4× L3. **Ran on this laptop → 42.2 GB/s peak → SINGLE-CHANNEL.** Resolves the
+  project's #1 unknown (prediction ffe5dd resolved FALSE — I'd guessed dual). Consequence: halve
+  the tok/s table (3B≈21, 7B≈9 tok/s), 7B now clearly too slow → validates 3B-4B default. Thread
+  scaling (2 threads=13, 12=42 GB/s) shows decode's bandwidth ceiling needs >2 threads — nuances
+  the "pin to P-cores" advice (that's for compute-bound prefill). Updated DE-RISKING §1 to [FACT].
+- **Rust leg (NEW, built+run):** `telemetry-rs/` — zero-dependency 1 Hz sampler (RAPL w/
+  top-level-domain + rollover correctness, thermal, freq, PSI, mem → NDJSON). `cargo build
+  --release` clean; ran 2 Hz, valid output (caught a live 93°C→58°C cooldown after the bench).
+  RAPL root-only confirmed at runtime (fail-soft; needs setup_rapl_access.sh). The "hardened in
+  Rust" telemetry the docs promised.
+- **Phase 3 (challenges-in-guest), rendering+scoring done:** `challenges/provision.py` —
+  `build_provisioning_script` (root build-time script from resolved fragments),
+  `run_success_check` / `run_scripted_solver` (score in-guest over the ActionChannel by EXIT
+  STATUS, never the agent's claim). +28 tests (`tests/test_provision.py`, all 7 specs × probe).
+  Actual guest execution (adduser/chmod 4755/nft as root) is Phase-2-on-host dependent.
+
+**Tests: 92 pass** (was 64). gitignore updated for target/ + bench/membw. Predictions resolved:
+0f0663 (multithread membw) TRUE, 7e729d (Rust RAPL via std::fs) TRUE, ffe5dd (dual-channel) FALSE.
+
+## Integration spine — Phase 4/5 connective tissue (2026-09-24)
+
+Wired the four lanes into one runnable pipeline via `eval/bridge.py` (chose this over the
+eBPF leg: eBPF needs root + an uninstalled toolchain and couldn't be verified here; the spine
+is safe, fully testable with fakes, and higher value). Device-safety: fakes only, no model
+download, no VM, no root; guarded a test run with `ulimit -v 4000000`. No crash risk.
+
+- `map_outcome` (EpisodeOutcome→FailureCode, honest coarse auto-code; solve→EXPLOITED_INTENDED,
+  refined by human coding later), `episode_result_to_record` (EpisodeResult→EpisodeRecord,
+  honest zeros for unmeasured token/energy fields).
+- `GeneratedEnvController` (real challenge generator: seed-distinct instance + checksum, tier
+  label Ln→Level→spec), `NullTelemetryCollector` (safe, returns nominal-clean placeholder
+  telemetry — clearly labeled not-measured), `LoopAgentController` (runs the REAL Episode loop).
+- `smoke_episode_builder` wires the real loop with no model/VM for a reference batch.
+
+**Proven end-to-end:** `BatchRunner.run_batch()` over L2(12)+L6(32) = 44 real loop episodes →
+EpisodeRecords → `eval.report` distribution table with Wilson 95% CIs + top taxonomy per cell.
+Caught (and fixed correctly) the confound gates flagging zeroed telemetry — validated the gates
+are real. +4 tests (`tests/test_bridge.py`). **96 tests pass** (was 92).
+
+Swap `smoke_episode_builder` for a LlamaServerClient+VsockChannel builder and the SAME pipeline
+yields real numbers — that's the Phase 1-2-on-host handoff.
+
+## Host-dependent phase (2026-09-24) — one at a time, crash-safe
+
+Baseline before starting: 8.1 GB free RAM, 146 GB disk, load 1.2 → healthy.
+
+- **eBPF/C leg DONE (polyglot set now complete):** `observability/` — runqlat.bt (P/E-core
+  scheduler contention), syscall_footprint.bt (host-side step cost), blockio.bt (overlay-reset
+  cost + swap thrash), README. Standard bpftrace idioms; NOT run in CI (needs root + bpftrace,
+  neither assumed). Prediction b444f1 resolved TRUE. Polyglot: C++ (bench) · Rust (telemetry-rs)
+  · Python (loop/eval/challenges) · eBPF/C (observability).
+- **llama.cpp build: RUNNING in background**, capped `JOBS=2 nice -19` (crash-safety: won't peg
+  the 2 P-cores; Ubuntu thermal-throttles rather than crashes). No model downloaded (that's a
+  separate, careful step). Log: scratchpad/llama_build.log. Prediction be9414 (p=0.85).
+- **NEXT (after build):** verify binaries; then a SMALL model + short `llama-bench` to get real
+  tok/s (Phase 1 measurement) — done carefully with monitoring. Alpine guest (Phase 2) needs
+  root + virt tools → hand-off/scripted, not auto-run here.
+
 ## Open questions to resolve later
 
 - [ ] Measure memory channels (dmidecode) — collapses most [EST].

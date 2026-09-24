@@ -1,0 +1,17 @@
+[package]
+name = "cage-telemetry"
+version = "0.1.0"
+edition = "2021"
+description = "Lean, zero-dependency 1 Hz resource+energy sampler for the Constraint Cage (the polyglot stack's Rust leg)."
+license = "MIT"
+
+# Deliberately ZERO dependencies. A 1 Hz sysfs sampler needs no async runtime
+# and no serde -- std::fs + a hand-rolled NDJSON line keeps the binary tiny and
+# the footprint honest on a 16 GB / 2-P-core host, which is the whole point of
+# doing telemetry in Rust rather than Python here (docs/ARCHITECTURE.md).
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

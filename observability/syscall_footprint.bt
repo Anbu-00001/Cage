@@ -1,0 +1,38 @@
+#!/usr/bin/env bpftrace
+/*
+ * syscall_footprint.bt -- syscall counts per process over a rolling window.
+ *
+ * What it gives the project: a cheap, honest picture of what the HOST-side
+ * pieces actually do at the kernel boundary during a trial -- the orchestrator
+ * (python3/rust), llama-server, and qemu-system. Spikes in a process's syscall
+ * rate line up with agent actions and channel round-trips, so this is a coarse
+ * "cost of a step" signal that complements the RAPL/thermal telemetry
+ * (telemetry-rs/) without adding a sampling loop.
+ *
+ * Scope reminder: host-side eBPF sees HOST processes (orchestrator, QEMU,
+ * llama-server), NOT the guest's internal syscalls -- those are behind the VM
+ * boundary (which is the point; the host is sacred). To trace inside the cage,
+ * run bpftrace in the guest instead. This keeps observability on the right side
+ * of the boundary the whole safety story rests on (Part 19).
+ *
+ * Run (needs root + bpftrace):
+ *   sudo bpftrace observability/syscall_footprint.bt
+ *
+ * NOTE: not executed in this repo's tests (needs root); ready-to-run instrument.
+ */
+
+tracepoint:raw_syscalls:sys_enter
+{
+    // Count only the processes we care about; drop the filter to see everything.
+    if (comm == "llama-server" || comm == "qemu-system-x86" ||
+        comm == "python3" || comm == "cage-actiond") {
+        @syscalls[comm] = count();
+    }
+}
+
+interval:s:10
+{
+    time("%H:%M:%S syscalls in last 10s:\n");
+    print(@syscalls);
+    clear(@syscalls);
+}

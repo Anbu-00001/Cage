@@ -95,8 +95,12 @@ docs/
 src/agent/              the agent loop, typed tools, memory, state machine
 src/orchestrator/       host-side episode driver + llama-server + guest channel
 src/telemetry/          1 Hz RAPL/temp/freq/PSI/tok-s collector
-eval/                   batch runner, statistics (Wilson/bootstrap CI, ICC), taxonomy
-challenges/             challenge specs + seeded procedural generator
+eval/                   batch runner, statistics (Wilson/bootstrap CI, ICC), taxonomy, bridge.py (integration spine)
+challenges/             challenge specs + seeded procedural generator + provision.py (Phase 3)
+bench/                  membw.cpp — C++ STREAM-triad memory-bandwidth benchmark (polyglot: C++)
+telemetry-rs/           cage-telemetry — zero-dep Rust 1 Hz RAPL/thermal/PSI sampler (polyglot: Rust)
+observability/          bpftrace eBPF instruments — runqlat/syscalls/blockio (polyglot: eBPF/C)
+vm/guest/               action_daemon.py — in-guest vsock action executor (stdlib-only)
 vm/scripts/             guest build / snapshot / revert
 scripts/                env-validation, llama.cpp build helpers
 config/                 versioned run configs (pin everything for reproducibility)

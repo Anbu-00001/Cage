@@ -1,0 +1,38 @@
+#!/usr/bin/env bpftrace
+/*
+ * runqlat.bt -- run-queue (scheduler) latency histogram per process.
+ *
+ * THE question this answers for this project: on a 2-P-core / 8-E-core hybrid,
+ * does the KVM guest (pinned to E-cores) or the OS steal on-CPU time from
+ * llama-server (pinned to the P-cores)? Run-queue latency = how long a woken
+ * task waited to actually run. If llama-server's runqueue latency climbs while
+ * a trial's guest is busy, that is scheduler contention degrading decode tok/s
+ * -- exactly the "2 fast cores, not twelve" story, measured instead of asserted
+ * (constraint-cage.md Part 1). This is the eBPF/C leg of the polyglot stack: a
+ * near-zero-overhead in-kernel probe, no sampling loop stealing cycles.
+ *
+ * Run (needs root + bpftrace: `sudo apt install bpftrace`):
+ *   sudo bpftrace observability/runqlat.bt
+ * Ctrl-C to print the histograms. Filter to one process by uncommenting below.
+ *
+ * NOTE: not executed in this repo's tests (needs root + a live workload); it is
+ * a ready-to-run instrument, syntax per bpftrace's standard runqlat idiom.
+ */
+
+tracepoint:sched:sched_wakeup      { @qt[args->pid] = nsecs; }
+tracepoint:sched:sched_wakeup_new  { @qt[args->pid] = nsecs; }
+
+tracepoint:sched:sched_switch
+{
+    $ts = @qt[args->next_pid];
+    if ($ts) {
+        // Per-process run-queue latency in microseconds.
+        // Uncomment the filter to focus on inference vs the VM:
+        //   if (args->next_comm == "llama-server" || args->next_comm == "qemu-system-x86") { ... }
+        @runq_us[args->next_comm] = hist((nsecs - $ts) / 1000);
+        delete(@qt[args->next_pid]);
+    }
+}
+
+interval:s:10 { print(@runq_us); clear(@runq_us); }
+END { clear(@qt); }

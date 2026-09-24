@@ -34,3 +34,13 @@ graphify-out/
 .vscode/
 .idea/
 .DS_Store
+
+# Rust build output
+target/
+
+# C++ compiled benchmark
+bench/membw
+*.o
+
+# External source clones (reproducible from the pinned .commit + build script)
+third_party/*/

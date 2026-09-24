@@ -1,0 +1,33 @@
+#!/usr/bin/env bpftrace
+/*
+ * blockio.bt -- block-I/O latency histogram.
+ *
+ * Two project-specific reasons to watch block I/O:
+ *   1. Per-trial reset cost: the qcow2 overlay discard-and-recreate
+ *      (vm/scripts/reset_overlay.sh) and any guest disk churn show up here --
+ *      this is where the "reset in < 2 s" target (docs/DE-RISKING.md §6) is
+ *      confirmed or refuted at the device level.
+ *   2. Swap thrash: on a 16 GB single-channel box, if the model or guest ever
+ *      swaps, decode tok/s collapses (constraint-cage.md Part 4). A sudden tail
+ *      of high-latency I/O to the swap device is the fingerprint of exactly the
+ *      memory-pressure confounder the eval gates flag (docs/EVALUATION.md §5).
+ *
+ * Run (needs root + bpftrace):
+ *   sudo bpftrace observability/blockio.bt
+ *
+ * NOTE: not executed in this repo's tests (needs root); ready-to-run instrument.
+ */
+
+tracepoint:block:block_rq_issue    { @start[args->sector] = nsecs; }
+
+tracepoint:block:block_rq_complete
+{
+    $s = @start[args->sector];
+    if ($s) {
+        @io_latency_us = hist((nsecs - $s) / 1000);
+        delete(@start[args->sector]);
+    }
+}
+
+interval:s:10 { print(@io_latency_us); clear(@io_latency_us); }
+END { clear(@start); }

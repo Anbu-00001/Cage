@@ -18,7 +18,13 @@ imports resolve; import-root + `.gitignore` + `pyproject.toml` in place.
 
 ---
 
-## Phase 1 — Host reality & real inference ⬜  (gate: memory channels)
+## Phase 1 — Host reality & real inference 🔨  (gate: memory channels — RESOLVED)
+
+**Update 2026-09-24:** the memory-channel gate is measured — `bench/membw` reports **42.2 GB/s
+= single-channel** (docs/DE-RISKING.md §1). Model-size decision locked to 1B–4B (7B ≈ 9 tok/s is
+too slow). Grammar-constrained `LlamaServerClient` is done. Remaining: build llama.cpp +
+`llama-bench` sweep on the real host, and the `--fix-rapl` / P-core-pin steps.
+
 
 **Goal:** collapse the big `[EST]`→`[FACT]` unknowns and get one *real* (non-mock) agent step.
 
@@ -55,7 +61,14 @@ byte-identical reset < 2 s (checksummed); guest cannot reach host (verified); ag
 command in-guest over vsock. **Risk gate:** isolation audit must pass before any Level-6 flaw
 is installed.
 
-## Phase 3 — Challenges live in the guest ⬜
+## Phase 3 — Challenges live in the guest 🔨  (rendering + scoring done)
+
+**Update 2026-09-24:** `challenges/provision.py` renders the root build-time provisioning
+script from a resolved instance and scores trials in-guest over the channel by exit status
+(`run_success_check` / `run_scripted_solver`), +28 tests. Remaining (needs a live guest from
+Phase 2): actually apply provisioning to the overlay as root and confirm human + scripted
+solver both solve L1–L6 with the probe variant.
+
 
 **Goal:** the procedural challenge specs actually provision inside the guest and are solvable.
 
@@ -81,7 +94,14 @@ calibrated difficulty curve; probe variants pass. **Risk gate:** every fixture s
 `run.sh --seed N` produces a complete, reconstructable episode record. **Risk gate:**
 telemetry overhead must not steal decode cycles (measure).
 
-## Phase 5 — Eval rigor at scale ⬜
+## Phase 5 — Eval rigor at scale 🔨  (spine connected end-to-end)
+
+**Update 2026-09-24:** `eval/bridge.py` connects the real agent loop + real challenge
+generator + real `BatchRunner` + real stats/report into one pipeline. Demonstrated: 44 episodes
+(L2×12 + L6×32) → EpisodeRecords → distribution table with Wilson 95% CIs and per-cell top
+taxonomy code (+4 tests). Outcomes are fixture-driven for now (plumbing proof); real numbers
+arrive when the episode builder is swapped to LlamaServerClient + VsockChannel on the host.
+
 
 **Goal:** distributions, not hero runs.
 

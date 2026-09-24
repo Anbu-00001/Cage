@@ -83,6 +83,8 @@ The guest is reachable only through that one narrow, logged channel — never a 
 
 Every choice is defensible in an interview by pointing at the same three numbers: **2 performance cores, 16 GB RAM, 15 W.** Full rationale in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+**Implemented so far (not aspirational):** the **C++** leg is real — [`bench/membw.cpp`](bench/membw.cpp), a STREAM-triad benchmark that measured **42.2 GB/s = single-channel** on the target laptop (this is the number that sets the tok/s ceiling; see [docs/DE-RISKING.md](docs/DE-RISKING.md) §1). The **Rust** leg is real — [`telemetry-rs/`](telemetry-rs/), a zero-dependency 1 Hz RAPL/thermal/PSI sampler. The agent loop, host↔guest vsock channel + in-guest daemon, eval harness, and challenge ladder are **Python** (prototype-first, per the plan). eBPF observability is still to come.
+
 ## Repo map
 
 | Path | What's there |

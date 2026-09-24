@@ -15,22 +15,30 @@ recommendation, and residual open questions. Legend tags as elsewhere; `[VERIFIE
 
 ---
 
-## 1. Memory channels — single vs dual (THE bandwidth multiplier) `[OPEN]`
+## 1. Memory channels — single vs dual (THE bandwidth multiplier) `[FACT — measured 2026-09-24]`
 
 **Risk:** decode tok/s ≈ bandwidth ÷ model size. Single-channel ~halves it → every tok/s
 `[EST]` in the design docs could be 2× optimistic.
 
-**Findings `[VERIFIED-2026-09]`:** the Dell Inspiron 16 5640 has **two SO-DIMM slots and no
-soldered RAM** — memory is upgradeable DDR5-5200/5600. Stock units commonly ship a **single
-8 GB module**. Therefore a 16 GB unit is *either* **1×16 GB (single-channel)** *or*
-**2×8 GB (dual-channel)** — the box's tok/s ceiling is decided by which one this unit has.
+**MEASURED on this unit `[FACT]`:** `bench/membw` (C++ STREAM triad, built + run here) reports
+**42.2 GB/s peak realized bandwidth** → **single-channel**. A dual-channel DDR5-5200 config
+would land ~60–75 GB/s on STREAM triad; 42 GB/s sits right at the single-channel theoretical
+(~41.6 GB/s). Thread scaling: 1 thread 11.6 · 2 → 12.9 · 4 → 13.5 · 8 → 39.2 · 12 → 42.2 GB/s.
+(Confirm the module count with `sudo dmidecode -t memory` — needs a password here — but the
+bandwidth is decisive on its own.) **Prediction `ffe5dd` resolved FALSE** (I'd guessed dual).
 
-**Recommendation:** run `sudo dmidecode -t memory` **first**, before any benchmarking. If it
-reports one populated slot → **single-channel; halve every tok/s estimate** and bias to
-1B–3B models. If two matched modules → dual-channel, 3B–4B is comfortable. If it's 1×16 GB,
-a **~₹2–4k second 8 GB module (2×8) is the single cheapest performance upgrade** in the whole
-project and should be recommended in the write-up. **Prediction `ffe5dd` stays open until
-`dmidecode` is run on this exact unit.**
+**Consequences (act on these):**
+- **Halve the design docs' tok/s table.** At 42 GB/s: 3B Q4 (~2 GB) → ~21 tok/s ceiling; 7B Q4
+  (~4.5 GB) → ~9 tok/s. This *strengthens* the "3B–4B default, 7B comparator" choice — 7B is now
+  clearly Yellow/Red for sustained autonomous use. Bias to 1B–4B.
+- **Cheapest upgrade in the project:** if `dmidecode` shows 1×16 GB, adding a matched 8 GB stick
+  (→ 2×8 dual-channel) would roughly *double* the tok/s ceiling. Flag it in the write-up.
+- **Thread-count nuance (new, measured):** the 2 P-cores alone reach only ~13 GB/s of the
+  ~42 GB/s ceiling — memory saturation needs many threads. So "pin to 2 P-cores" (DE-RISKING §4)
+  is right for *compute-bound prefill* but **decode is bandwidth-bound and may want more threads**
+  to approach the ceiling. Don't assume; let `llama-bench` arbitrate in Phase 1 — but the raw
+  ceiling and its thread-scaling are now known, which is exactly the kind of "measure, don't
+  assume" result the project exists to produce.
 
 ## 2. RAPL energy counters — root-only by default `[VERIFIED-2026-09]` → mitigated
 

@@ -89,6 +89,9 @@ docs/
   EVALUATION.md         implementable eval methodology + statistics
   CHALLENGES.md         the graded cage (Levels 1-7) + procedural design
   POSITIONING.md        positioning, naming, honest risks, resume framing
+  DE-RISKING.md         web-researched mitigations for the 6 riskiest unknowns
+  ROADMAP.md            phased build plan (P0 done → P6 MVE), gated by DE-RISKING
+  viz/                  visual showcase (three.js / cartoonic) of the agent climbing the ladder
 src/agent/              the agent loop, typed tools, memory, state machine
 src/orchestrator/       host-side episode driver + llama-server + guest channel
 src/telemetry/          1 Hz RAPL/temp/freq/PSI/tok-s collector

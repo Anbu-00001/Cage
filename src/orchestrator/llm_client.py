@@ -52,6 +52,7 @@ class LlamaServerClient:
         temperature: float = 0.0,
         seed: int | None = None,
         max_tokens: int = 512,
+        json_schema: dict | None = None,
     ) -> str:
         payload: dict[str, object] = {
             "messages": [{"role": "user", "content": prompt}],
@@ -60,6 +61,18 @@ class LlamaServerClient:
         }
         if seed is not None:
             payload["seed"] = seed
+        if json_schema is not None:
+            # llama-server's OpenAI-compatible endpoint accepts
+            # response_format with a json_schema; internally it compiles
+            # the schema to a GBNF grammar and masks any token that would
+            # break conformance, so the returned content is guaranteed
+            # parseable (docs/DE-RISKING.md §3). We pay ~5-8% throughput
+            # for it and delete the speculative parse-retry loop's reason
+            # to exist against a real model.
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "agent_step", "schema": json_schema, "strict": True},
+            }
         try:
             resp = self.client.post("/v1/chat/completions", json=payload)
             resp.raise_for_status()
@@ -104,7 +117,12 @@ class FakeLLMClient:
         temperature: float = 0.0,
         seed: int | None = None,
         max_tokens: int = 512,
+        json_schema: dict | None = None,
     ) -> str:
+        # A scripted fake cannot constrain decoding; it just returns its
+        # next canned line. json_schema is accepted (to satisfy the
+        # CompletionClient Protocol) and ignored -- the scripts are
+        # already valid JSON by construction.
         self.calls.append(prompt)
         if self.responder is not None:
             return self.responder(prompt)

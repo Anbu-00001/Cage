@@ -57,6 +57,16 @@ class CompletionClient(Protocol):
         temperature: float = 0.0,
         seed: int | None = None,
         max_tokens: int = 512,
+        json_schema: dict | None = None,
     ) -> str:
-        """Return the model's raw completion text for ``prompt``."""
+        """Return the model's raw completion text for ``prompt``.
+
+        ``json_schema`` (optional): a JSON Schema the completion MUST
+        conform to. A real llama.cpp-backed client turns this into a GBNF
+        grammar and *constrained-decodes*, so malformed JSON is never
+        emitted in the first place (see docs/DE-RISKING.md §3) -- this is
+        what lets the agent loop treat tool calls as reliable rather than
+        parse-retrying. Clients that cannot constrain output (e.g. the
+        scripted fake) accept and ignore it.
+        """
         ...

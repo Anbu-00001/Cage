@@ -109,6 +109,37 @@ if _have podman; then _run podman --version; fi
 _run ip -br addr
 _run ip -br link
 
+_section "Derived hints (read-only) — parsed answers to the key [OPEN] questions"
+# Memory channels (docs/DE-RISKING.md §1): the Inspiron 16 5640 has 2 SO-DIMM
+# slots, not soldered. One populated module => single-channel => halve every
+# tok/s estimate. Needs root for dmidecode.
+if _have dmidecode; then
+    mods="$(sudo -n dmidecode -t memory 2>/dev/null | grep -c '^\sSize: [0-9]' || true)"
+    if [ -n "${mods:-}" ] && [ "${mods:-0}" -gt 0 ]; then
+        echo "populated memory modules: $mods  -> $([ "$mods" -ge 2 ] && echo 'likely DUAL-channel (good)' || echo 'likely SINGLE-channel (HALVE tok/s; a 2nd matched stick is the cheapest upgrade)')"
+    else
+        echo "populated memory modules: unknown (run with sudo for dmidecode)"
+    fi
+fi
+# P-cores (docs/DE-RISKING.md §4): pin llama.cpp to the highest-MHz cluster.
+if _have lscpu; then
+    echo "P-core hint (highest MAXMHZ CPUs — pin inference here with taskset -c):"
+    lscpu --all --extended 2>/dev/null | awk 'NR==1{print "  "$0} NR>1{print "  "$0}' | sort -k
+    echo "  (choose the CPU ids in the top MAXMHZ group; reserve the rest for the VM/OS)"
+fi
+# RAPL readability (docs/DE-RISKING.md §2): joules/solve needs this readable.
+rapl=/sys/class/powercap/intel-rapl:0/energy_uj
+if [ -e "$rapl" ]; then
+    if [ -r "$rapl" ] && cat "$rapl" >/dev/null 2>&1; then
+        echo "RAPL energy_uj: READABLE by $(id -un) -> joules/solve is measurable"
+    else
+        echo "RAPL energy_uj: NOT readable by $(id -un) -> run scripts/setup_rapl_access.sh (installs a udev rule)"
+    fi
+else
+    echo "RAPL energy_uj: not present (no intel-rapl powercap domain found)"
+fi
+echo
+
 _section "Summary — the three numbers Part 23/D2 says collapse most [EST] into [FACT]"
 cat <<'EOF'
 1. Memory channels (dmidecode -t memory, above) — single vs dual.

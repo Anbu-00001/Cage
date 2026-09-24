@@ -279,12 +279,19 @@ class AgentLoop:
     # -- helpers ----------------------------------------------------------
 
     def _get_step_output(self, prompt: str) -> AgentStepOutput | None:
+        # Ask the model to constrain its output to the step schema. Against
+        # a real llama.cpp client this is grammar-constrained decoding, so
+        # the parse below effectively cannot fail (docs/DE-RISKING.md §3);
+        # the retry loop remains only as a safety net for clients that
+        # can't constrain (and is a no-op cost when they can).
+        step_schema = AgentStepOutput.model_json_schema()
         for attempt in range(_MAX_PARSE_RETRIES + 1):
             raw = self.llm.complete(
                 prompt,
                 temperature=self.config.temperature,
                 seed=self.config.seed,
                 max_tokens=self.config.max_tokens,
+                json_schema=step_schema,
             )
             try:
                 return parse_step_output(raw)

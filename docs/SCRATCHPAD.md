@@ -118,6 +118,59 @@ not broken code. Fixes applied by me (Opus, integration):
 CLAUDE.md, source docs, dir name = Constraint Cage. Sensible + intentional as a
 name/codename split — but user should confirm before it's fully consistent-ized.
 
+## De-risking research + phasing — DONE (2026-09-24)
+
+Web research on the 6 riskiest unknowns → `docs/DE-RISKING.md`; phase plan → `docs/ROADMAP.md`.
+Key outcomes (ana predictions resolved):
+- `78f6ed` RAPL root-only by default → **TRUE** (needs udev rule; joules/solve mitigated).
+- `a244fe` pin to P-cores (not all 12 threads) → **TRUE** (~3× on Intel hybrids).
+- `ffe5dd` dual-channel → **STILL OPEN**: Inspiron 16 5640 has 2 SO-DIMM slots, NOT soldered;
+  stock often 1×8 → a 16GB unit is either 1×16 (single) or 2×8 (dual). MUST run `dmidecode`.
+- **Biggest de-risk:** JSON/tool-call reliability is solved by llama.cpp GBNF grammar (JSON
+  Schema → grammar, invalid tokens masked) — delete parse-retry code.
+- **Design refinement:** reset via qcow2 **overlay discard-and-recreate**, NOT libvirt
+  external-snapshot revert (libvirt can't revert external snapshots).
+- vsock = one libvirt XML stanza (host CID 2, guest CID>2); confinement mostly free via
+  libvirt (built-in seccomp + AppArmor sVirt + cgroups).
+
+**Code-writing is GATED on the viz agent returning** (per user). First code targets when it
+lands (all authorable now, host only needed to run): real grammar-constrained LlamaServerClient,
+real VsockChannel + guest daemon, overlay-reset vm/scripts, validate_env.sh --fix-rapl +
+channel/P-core detection, challenge→provisioning applier. Phase order in ROADMAP.md.
+
+## Code increment — Phase 1/2 foundations (2026-09-24, viz gate cleared)
+
+Viz landed (viz/index.html, 63 KB, 2D canvas showcase, headless-Chrome verified). Then wrote
+real code per ROADMAP (all authorable now; host only needed to *run*):
+
+- **Grammar-constrained inference (DE-RISKING §3):** `CompletionClient.complete` +
+  `LlamaServerClient` + `FakeLLMClient` now take `json_schema`; the real client emits
+  `response_format:{type:json_schema,...}` so llama-server constrained-decodes → malformed
+  tool calls impossible. Loop passes `AgentStepOutput.model_json_schema()` each step; retry
+  loop kept only as a fallback. New test `tests/test_llm_grammar.py` (httpx MockTransport, 4 tests).
+- **Hardened host↔guest channel (DE-RISKING §5):** fixed a real stream-socket bug —
+  `VsockChannel` read a single `recv()` (truncates large guest output). Added newline-framed
+  `send_json_line`/`recv_json_line`/`parse_action_response` with a 16 MB cap; rewrote execute.
+- **Guest daemon (NEW):** `vm/guest/action_daemon.py` — self-contained stdlib listener
+  (AF_VSOCK + AF_INET test mode), per-command timeout w/ process-group kill, 64 KB output
+  truncation. New test `tests/test_channel_wire.py` runs the REAL daemon over loopback with
+  the REAL framing (5 tests incl. the multi-recv regression + timeout).
+- **Fast reset (DE-RISKING §6):** `vm/scripts/reset_overlay.sh` — qcow2 overlay discard over
+  a checksummed immutable golden; **functionally verified with qemu-img** (overlay has golden
+  as backing). `vm/scripts/build_golden_image.sh` — Alpine golden via alpine-make-vm-image +
+  virt-copy-in (daemon + OpenRC service + cage user + vsock module), read-only + checksummed.
+- **RAPL (DE-RISKING §2):** `scripts/setup_rapl_access.sh` (mutating, installs udev rule);
+  `validate_env.sh` got a read-only "Derived hints" section (memory-module count, P-core ids,
+  RAPL readability). validate_env.sh stays read-only; the write lives in the separate script.
+
+**Verification:** 64/64 tests pass (was 55; +9). All shell `bash -n` clean; daemon compiles;
+reset primitive live-tested. ana predictions resolved: 78f6ed RAPL TRUE, a244fe P-core TRUE,
+bd5408 code-first-run TRUE. ffe5dd (channels) still OPEN → needs dmidecode on the unit.
+
+**Known cosmetic:** IDE Pyright still flags `src.*`/`eval.*` import-root despite
+pyrightconfig.json extraPaths — runtime is authoritative & green; likely needs a Pylance
+reload. Not a runtime issue.
+
 ## Open questions to resolve later
 
 - [ ] Measure memory channels (dmidecode) — collapses most [EST].

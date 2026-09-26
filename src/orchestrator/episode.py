@@ -105,6 +105,7 @@ class Episode:
             max_tokens=self.config.model.n_predict,
             submit_nudge=self.config.loop.submit_nudge,
             closure_prompt=self.config.loop.closure_prompt,
+            commit_confidence=self.config.loop.commit_confidence,
         )
         loop = AgentLoop(goal=self.goal, llm=self.llm, tools=tools, config=loop_config)
         result = loop.run()

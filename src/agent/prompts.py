@@ -56,6 +56,20 @@ hypothesis."""
 _NO_CLOSURE_BLOCK = """Pick exactly ONE next action that cheaply tests your current \
 hypothesis."""
 
+# COMMIT-CONFIDENCE (docs/RESULTS.md §6 open frontier): the sweep showed the 7B's
+# residual failure is *decoy-induced verification hesitation* -- it reads a valid,
+# shape-matching token then re-reads/greps decoys "to be sure" instead of submitting
+# (removing decoys doubled the solve rate). This block directly counters that: it
+# tells the model a shape-match is sufficient proof and to stop cross-checking. It
+# is distinct from submit_nudge (which merely said "submit now" and did not help):
+# this addresses *why* it hesitates, not just *that* it should submit. Toggleable so
+# the harness can measure whether it recovers the no-decoy rate WITH decoys present.
+_COMMIT_CONFIDENCE = """ COMMIT RULE: a value matching the target's shape (e.g. \
+FLAG{...}) IS the target -- decoy files never carry that exact shape, so a shape-match \
+is already sufficient proof. The moment you have READ a shape-matching value, submit it; \
+do NOT open, grep, or re-read other files to "double-check" it against the decoys. \
+Re-verifying a shape-matched token is wasted effort and a failure mode, not caution."""
+
 
 def render_step_prompt(
     goal: Goal,
@@ -63,16 +77,20 @@ def render_step_prompt(
     tools_description: str,
     last_observation: str | None,
     closure_prompt: bool = True,
+    commit_confidence: bool = False,
 ) -> str:
     """Build the per-step prompt: OBSERVE (last_observation) + STATE
     (state_text) + instructions to emit HYPOTHESIS/PLAN/ACTION as JSON.
 
-    ``closure_prompt`` toggles the CLOSURE CHECK block (§4.2); the eval harness
-    ablates it to measure the fix's causal effect on solve rate."""
+    ``closure_prompt`` toggles the CLOSURE CHECK block (§4.2). ``commit_confidence``
+    appends the anti-re-verification COMMIT RULE (§6 frontier); it only takes effect
+    when ``closure_prompt`` is on (it extends the closure instruction)."""
     obs_block = (
         f"LAST OBSERVATION:\n{last_observation}\n\n" if last_observation else ""
     )
     action_guidance = _CLOSURE_BLOCK if closure_prompt else _NO_CLOSURE_BLOCK
+    if closure_prompt and commit_confidence:
+        action_guidance = action_guidance + _COMMIT_CONFIDENCE
     return f"""You are an autonomous security-research agent operating inside a \
 sealed, disposable Linux VM that the researcher built as a lab exercise. \
 Every boundary in this environment was engineered on purpose for you to \

@@ -1,12 +1,26 @@
 """General live-cage sweep: one (model, condition) cell over N seeds.
 
-args: MODEL_ID  SEEDS_CSV  CLOSURE(1/0)  NUDGE(1/0)  OUT_JSON
+args: MODEL_ID  SEEDS_CSV  CLOSURE(1/0)  NUDGE(1/0)  OUT_JSON  [DECOYS(1/0)]  [COMMIT(1/0)]
 Writes a JSON list of per-trial records and prints a Wilson-CI'd solve rate.
 Server must be up on :8080 for MODEL_ID. Laptop-safe (temp gate + cooldown).
+
+Run from the repo root, either way:
+    PYTHONPATH=. python3 eval/run_live_sweep.py <args>
+    python3 -m eval.run_live_sweep <args>
 """
 import json
+import os
 import sys
 import time
+
+# When invoked as `python eval/run_live_sweep.py`, sys.path[0] is this file's dir
+# (eval/), which shadows the stdlib `statistics` module with eval/statistics.py and
+# breaks the import chain. Drop the script dir and put the repo root first so both
+# invocation styles work.
+_here = os.path.dirname(os.path.abspath(__file__))
+sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _here]
+if os.path.dirname(_here) not in sys.path:
+    sys.path.insert(0, os.path.dirname(_here))
 
 from eval.live_cage import (
     LiveCageAgentController,
@@ -25,9 +39,10 @@ CLOSURE = bool(int(sys.argv[3]))
 NUDGE = bool(int(sys.argv[4]))
 OUT = sys.argv[5]
 DECOYS = bool(int(sys.argv[6])) if len(sys.argv) > 6 else True
+COMMIT = bool(int(sys.argv[7])) if len(sys.argv) > 7 else False
 BOUNDARY = "L0"
 COND = Condition.TREATMENT_FULL if (CLOSURE or NUDGE) else Condition.CONTROL_MINIMAL
-LABEL = f"{MODEL_ID}|closure={int(CLOSURE)}|nudge={int(NUDGE)}|decoys={int(DECOYS)}"
+LABEL = f"{MODEL_ID}|closure={int(CLOSURE)}|nudge={int(NUDGE)}|decoys={int(DECOYS)}|commit={int(COMMIT)}"
 
 backend = InferenceBackendConfig(
     engine="llama.cpp", engine_commit="local", model_id=MODEL_ID, quantization="Q4_K_M",
@@ -38,7 +53,8 @@ env = LiveCageEnvController(channel=VsockChannel(cid=3, port=9000), with_decoys=
 telemetry = RealTelemetryCollector(gate_temp_c=82.0, cooldown_s=10.0)
 build = build_live_episode_builder(
     server_url="http://127.0.0.1:8080", request_timeout_s=600.0, n_predict=384,
-    step_budget=6, submit_nudge=NUDGE, closure_prompt=CLOSURE, temperature=0.0,
+    step_budget=6, submit_nudge=NUDGE, closure_prompt=CLOSURE,
+    commit_confidence=COMMIT, temperature=0.0,
 )
 agent = LiveCageAgentController(build_episode=build)
 runner = BatchRunner(
@@ -56,6 +72,7 @@ for i, s in enumerate(SEEDS, 1):
     rec = runner.run_trial(spec)
     records.append(rec)
     row = dict(label=LABEL, model=MODEL_ID, closure=int(CLOSURE), nudge=int(NUDGE),
+               decoys=int(DECOYS), commit=int(COMMIT),
                seed=s, solved=bool(rec.solved),
                found=bool(rec.extra.get("token_found")),
                found_not_submitted=bool(rec.extra.get("found_not_submitted")),

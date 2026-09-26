@@ -111,6 +111,9 @@ class LoopSettingsConfig(BaseModel):
     # The CLOSURE CHECK prompt block (§4.2). Default on; set off to ablate the
     # fix and measure its causal effect on solve rate.
     closure_prompt: bool = Field(default=True)
+    # The COMMIT RULE anti-re-verification block (§6 frontier). Default off; on to
+    # test whether it recovers the no-decoy solve rate with decoys present.
+    commit_confidence: bool = Field(default=False)
 
 
 class RunConfig(BaseModel):

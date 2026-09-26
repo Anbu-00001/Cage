@@ -29,6 +29,21 @@ def test_closure_block_absent_when_ablated() -> None:
     assert "give_up" in p
 
 
+def test_commit_confidence_appended_only_with_closure() -> None:
+    base = render_step_prompt(_goal(), state_text="STEP: 0", tools_description="- t",
+                              last_observation=None)
+    assert "COMMIT RULE" not in base  # off by default
+    on = render_step_prompt(_goal(), state_text="STEP: 0", tools_description="- t",
+                            last_observation=None, commit_confidence=True)
+    assert "COMMIT RULE" in on
+    assert "shape-match" in on
+    # commit_confidence extends closure; with closure off it must NOT appear
+    off = render_step_prompt(_goal(), state_text="STEP: 0", tools_description="- t",
+                             last_observation=None, closure_prompt=False,
+                             commit_confidence=True)
+    assert "COMMIT RULE" not in off
+
+
 def test_both_variants_include_goal_and_tools() -> None:
     for closure in (True, False):
         p = render_step_prompt(_goal(), state_text="STEP: 0",

@@ -24,11 +24,14 @@ the full three-rung interpretation and the honest (n=5, underpowered) caveats.
 Bring up the guest (docs/GUEST-SETUP.md) and a llama-server on `127.0.0.1:8080`, then:
 
 ```bash
-# one cell: MODEL SEEDS CLOSURE NUDGE OUT [DECOYS]
-PYTHONPATH=. python3 eval/run_live_sweep.py qwen2.5-7b-q4km 101,102,103,104,105 1 0 out.json 1
+# one cell: MODEL SEEDS CLOSURE NUDGE OUT [DECOYS] [COMMIT]
+PYTHONPATH=. python3 eval/run_live_sweep.py qwen2.5-7b-q4km 101,102,103,104,105 1 0 out.json 1 0
 # aggregate several cells into the §6 table + deltas
 PYTHONPATH=. python3 eval/aggregate_sweep.py eval/sweep_data/cell*.json
 ```
+
+(`python3 -m eval.run_live_sweep <args>` works too; the script fixes its own `sys.path`
+so `eval/statistics.py` never shadows the stdlib module.)
 
 The wiring is `eval/live_cage.py` (`LiveCageEnvController` plants seed instances over vsock as
 the unprivileged `cage` user; `RealTelemetryCollector` gates on temperature). These are the

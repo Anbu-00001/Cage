@@ -294,6 +294,7 @@ def build_live_episode_builder(
     step_budget: int = 10,
     submit_nudge: bool = False,
     closure_prompt: bool = True,
+    commit_confidence: bool = False,
     temperature: float = 0.0,
 ) -> Callable[[TrialSpec, "LiveCageEnvController"], object]:
     """Return a ``build_episode`` that constructs a real Episode against the
@@ -321,7 +322,7 @@ def build_live_episode_builder(
             sampling=SamplingConfig(temperature=temperature),
             loop=LoopSettingsConfig(
                 step_budget=step_budget, replan_interval=10, submit_nudge=submit_nudge,
-                closure_prompt=closure_prompt,
+                closure_prompt=closure_prompt, commit_confidence=commit_confidence,
             ),
         )
         goal = Goal(

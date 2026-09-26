@@ -97,6 +97,10 @@ class LoopConfig:
     # found_not_submitted floor). Default ON; the eval harness sets it OFF to
     # ablate the fix and measure its causal effect on solve rate.
     closure_prompt: bool = True
+    # The COMMIT RULE anti-re-verification block (§6 frontier). Default OFF; the
+    # harness turns it on to test whether countering decoy-induced hesitation
+    # recovers the no-decoy solve rate while decoys are present.
+    commit_confidence: bool = False
 
 
 def _truncate_and_hash(text: str, limit: int) -> tuple[str, bool, str]:
@@ -195,6 +199,7 @@ class AgentLoop:
             tools_description=self.tools.describe(),
             last_observation=self._last_observation,
             closure_prompt=self.config.closure_prompt,
+            commit_confidence=self.config.commit_confidence,
         )
 
         step_output = self._get_step_output(prompt)
